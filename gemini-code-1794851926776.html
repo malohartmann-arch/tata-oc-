@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Un Aprem chez Tata Océ - Niveau 1</title>
+<style>
+  * { box-sizing: border-box; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: #141812; color: #fff; font-family: 'Courier New', monospace;
+    overflow: hidden; display: flex; flex-direction: column; justify-content: space-between;
+  }
+
+  #hud {
+    height: 38px; padding: 0 14px;
+    background: #1f261b; border-bottom: 2px solid #586e48;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px; font-weight: bold;
+  }
+  .badge { background: #11160f; border: 1px solid #728f5d; padding: 3px 8px; border-radius: 4px; }
+
+  #viewport {
+    position: relative; flex: 1; width: 100%;
+    display: flex; align-items: center; justify-content: center; background: #0d100c;
+  }
+  #gameCanvas {
+    max-width: 100%; max-height: 100%; aspect-ratio: 16 / 9;
+    background: #1e241b; image-rendering: pixelated;
+  }
+
+  .overlay {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-end; padding-bottom: 16px;
+    background: rgba(0,0,0,0.2); z-index: 5;
+  }
+  .overlay.hidden { display: none; }
+  .box {
+    background: rgba(20, 26, 17, 0.94); border: 3px solid #d4a74a;
+    border-radius: 10px; padding: 12px 20px; text-align: center;
+  }
+  .box h1 { margin: 0 0 6px; font-size: 17px; color: #ffd369; }
+  .box p { margin: 4px 0 10px; font-size: 13px; }
+
+  .drivers { display: flex; justify-content: center; gap: 20px; }
+  .card {
+    border: 2px solid #556649; background: #1a2116; border-radius: 8px;
+    padding: 8px 16px; opacity: 0.6; transition: 0.12s;
+  }
+  .card.active { border-color: #ffd369; background: #2f3b27; opacity: 1; transform: scale(1.07); }
+  .card img {
+    width: 64px; height: 64px; object-fit: cover; border-radius: 6px;
+    display: block; margin: 0 auto 4px; image-rendering: pixelated;
+  }
+  .card span { font-size: 13px; font-weight: bold; }
+
+  #controls {
+    height: 110px; padding: 10px 18px; background: #1b2217; border-top: 2px solid #586e48;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .dpad { display: flex; gap: 14px; }
+  .btn {
+    background: #3d4d32; border: 3px solid #8ea87a; border-bottom-width: 6px;
+    border-radius: 14px; color: #fff; font-family: inherit; font-weight: bold;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+  .btn:active, .btn.pressed { transform: translateY(3px); border-bottom-width: 3px; }
+  .btn-dir { width: 78px; height: 74px; font-size: 28px; }
+  .btn-act {
+    width: 150px; height: 74px; font-size: 15px; line-height: 1.2; text-align: center;
+    background: #c4711d; border-color: #ffd089;
+  }
+
+  #editor-panel {
+    position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,0.88);
+    border: 2px solid #ffd369; padding: 8px; border-radius: 6px; font-size: 11px;
+    max-width: 340px; z-index: 20; display: none;
+  }
+  #editor-output { width: 100%; height: 65px; font-size: 10px; margin-top: 4px; background: #111; color: #0f0; }
+</style>
+</head>
+<body>
+
+  <div id="hud">
+    <div class="badge">NIVEAU 1 : L'ARRIVÉE</div>
+    <div id="hud-screen" class="badge">ÉCRAN 1 / 8</div>
+    <div id="hud-driver" class="badge">PILOTE : OSCAR</div>
+  </div>
+
+  <div id="viewport">
+    <canvas id="gameCanvas" width="960" height="540"></canvas>
+
+    <div id="editor-panel">
+      <b>MODE TRACÉ (Touche E pour fermer)</b><br>
+      Clique sur la route dans l'ordre. <button id="btn-clear-pts">Effacer</button>
+      <textarea id="editor-output" readonly></textarea>
+    </div>
+
+    <!-- Écran Titre -->
+    <div id="screen-title" class="overlay">
+      <div class="box">
+        <h1>Un Aprem chez Tata Océ</h1>
+        <p>Choisis ton pilote avec ◀ ▶ puis appuie sur <b>ABOYER / SAUTER</b></p>
+        <div class="drivers">
+          <div id="card-oscar" class="card active">
+            <img src="oscar_debout.jpg" alt="Oscar">
+            <span>OSCAR</span>
+          </div>
+          <div id="card-julio" class="card">
+            <img src="julio_debout.jpg" alt="Julio">
+            <span>JULIO</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="controls">
+    <div class="dpad">
+      <button id="btn-left" class="btn btn-dir">◀</button>
+      <button id="btn-right" class="btn btn-dir">▶</button>
+    </div>
+    <button id="btn-action" class="btn btn-act">ABOYER /<br>SAUTER</button>
+  </div>
+
+<script>
+// ============================================================================
+// 1. CONFIGURATION DES ROUTES DU NIVEAU 1 (960 x 540)
+// ============================================================================
+const VITESSE_VOITURE = 2.4;
+const LARGEUR_VOITURE = 44;
+const HAUTEUR_VOITURE = 66;
+
+const ROUTES_NIVEAU_1 = [
+  {
+    fondFerme: 'n1_ecran1_ferme.jpg',
+    fondOuvert: 'n1_ecran1_ouvert.jpg',
+    portail: { x: 475, y: 375 },
+    dosDanes: [],
+    points: [
+      { x: 920, y: 455 },
+      { x: 640, y: 435 },
+      { x: 475, y: 395 },
+      { x: 475, y: 180 },
+      { x: 475, y: 15 }
+    ]
+  },
+  {
+    fondOuvert: 'n1_ecran2.jpg',
+    dosDanes: [{ x: 475, y: 265 }],
+    points: [
+      { x: 475, y: 525 },
+      { x: 475, y: 265 },
+      { x: 475, y: 15 }
+    ]
+  },
+  {
+    fondOuvert: 'n1_ecran3.jpg',
+    dosDanes: [],
+    points: [
+      { x: 410, y: 525 },
+      { x: 425, y: 445 },
+      { x: 525, y: 375 },
+      { x: 545, y: 295 },
+      { x: 465, y: 195 },
+      { x: 465, y: 110 },
+      { x: 480, y: 15 }
+    ]
+  },
+  {
+    fondOuvert: 'n1_ecran4.jpg',
+    dosDanes: [{ x: 515, y: 310 }],
+    points: [
+      { x: 515, y: 525 },
+      { x: 515, y: 310 },
+      { x: 515, y: 175 },
+      { x: 475, y: 148 },
+      { x: 20,  y: 148 }
+    ]
+  },
+  {
+    fondOuvert: 'n1_ecran5.jpg',
+    dosDanes: [{ x: 695, y: 315 }],
+    points: [
+      { x: 940, y: 315 },
+      { x: 695, y: 315 },
+      { x: 380, y: 315 },
+      { x: 205, y: 315 },
+      { x: 20,  y: 315 }
+    ]
+  },
+  {
+    fondOuvert: 'n1_ecran6.jpg',
+    dosDanes: [],
+    points: [
+      { x: 940, y: 355 },
+      { x: 380, y: 355 },
+      { x: 315, y: 345 },
+      { x: 280, y: 295 },
+      { x: 280, y: 15 }
+    ]
+  },
+  {
+    fondOuvert: 'n1_ecran7.jpg',
+    dosDanes: [],
+    points: [
+      { x: 375, y: 525 },
+      { x: 375, y: 205 },
+      { x: 420, y: 162 },
+      { x: 940, y: 162 }
+    ]
+  },
+  {
+    fondOuvert: 'n1_ecran8.jpg',
+    dosDanes: [],
+    estFinal: true,
+    points: [
+      { x: 20,  y: 170 },
+      { x: 325, y: 170 },
+      { x: 370, y: 245 },
+      { x: 455, y: 245 },
+      { x: 535, y: 185 } // Stationnement à droite de la voiture blanche
+    ]
+  }
+];
+
+// ============================================================================
+// 2. MOTEUR DU JEU
+// ============================================================================
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const sonAboiement = new Audio('aboiement.mp3');
+function playBark() {
+  sonAboiement.currentTime = 0;
+  sonAboiement.play().catch(() => {});
+}
+
+const images = {};
+const spritesDetoures = {};
+const listeSpritesVerts = ['voiture_seule.jpg', 'voiture_oscar.jpg', 'voiture_julio.jpg', 'oscar_debout.jpg', 'julio_debout.jpg'];
+
+function tenterDetourageVert(img) {
+  try {
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth;
+    c.height = img.naturalHeight;
+    const cx = c.getContext('2d');
+    cx.drawImage(img, 0, 0);
+    const id = cx.getImageData(0, 0, c.width, c.height);
+    const d = id.data;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i+1] > 130 && d[i+1] > d[i] * 1.25 && d[i+1] > d[i+2] * 1.25) {
+        d[i+3] = 0;
+      }
+    }
+    cx.putImageData(id, 0, 0);
+    return c;
+  } catch (e) {
+    return null; // Fallback si ouverture directe file:// sans serveur
+  }
+}
+
+[
+  'ecran_titre.jpg',
+  ...listeSpritesVerts,
+  'n1_ecran1_ferme.jpg', 'n1_ecran1_ouvert.jpg',
+  'n1_ecran2.jpg', 'n1_ecran3.jpg', 'n1_ecran4.jpg',
+  'n1_ecran5.jpg', 'n1_ecran6.jpg', 'n1_ecran7.jpg', 'n1_ecran8.jpg'
+].forEach(nom => {
+  const img = new Image();
+  img.src = nom;
+  img.onload = () => {
+    if (listeSpritesVerts.includes(nom)) {
+      const clean = tenterDetourageVert(img);
+      if (clean) spritesDetoures[nom] = clean;
+    }
+  };
+  images[nom] = img;
+});
+
+function drawVoiture(nom, cx, cy, angleRad, zOffset, wobble) {
+  const src = spritesDetoures[nom] || images[nom];
+  if (!src) return;
+
+  ctx.save();
+  ctx.translate(cx, cy - zOffset + wobble);
+  ctx.rotate(angleRad + Math.PI / 2);
+
+  if (spritesDetoures[nom]) {
+    ctx.drawImage(src, -LARGEUR_VOITURE / 2, -HAUTEUR_VOITURE / 2, LARGEUR_VOITURE, HAUTEUR_VOITURE);
+  } else {
+    ctx.beginPath();
+    ctx.roundRect(-LARGEUR_VOITURE / 2 + 5, -HAUTEUR_VOITURE / 2 + 4, LARGEUR_VOITURE - 10, HAUTEUR_VOITURE - 8, 12);
+    ctx.clip();
+    ctx.drawImage(src, -LARGEUR_VOITURE * 0.68, -HAUTEUR_VOITURE * 0.62, LARGEUR_VOITURE * 1.36, HAUTEUR_VOITURE * 1.24);
+  }
+  ctx.restore();
+}
+
+function drawChien(nom, x, y, taille) {
+  const src = spritesDetoures[nom] || images[nom];
+  if (!src) return;
+
+  ctx.save();
+  if (spritesDetoures[nom]) {
+    ctx.drawImage(src, x, y, taille, taille);
+  } else {
+    ctx.beginPath();
+    ctx.arc(x + taille / 2, y + taille / 2, taille * 0.34, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(src, x, y, taille, taille);
+  }
+  ctx.restore();
+}
+
+// --- État du jeu ---
+const state = {
+  mode: 'TITLE',
+  driver: 'oscar',
+  ecranIdx: 0,
+  portailOuvert: false,
+  pointIdx: 1,
+  winTimer: 0,
+  car: { x: 920, y: 455, angle: Math.PI, decalage: 0, z: 0, vz: 0, choc: 0 },
+  bulle: { texte: '', temps: 0, bx: 0, by: 0 },
+  dosDanesPasses: new Set(),
+  editeurActif: false,
+  pointsCliques: []
+};
+
+const input = { left: false, right: false };
+
+function actionPrincipale() {
+  if (state.mode === 'TITLE') { demarrerJeu(); return; }
+  if (state.mode === 'WIN') { retourTitre(); return; }
+
+  const scr = ROUTES_NIVEAU_1[state.ecranIdx];
+
+  if (scr.portail && !state.portailOuvert) {
+    const d = Math.hypot(state.car.x - scr.portail.x, state.car.y - scr.portail.y);
+    if (d < 130) {
+      state.portailOuvert = true;
+      playBark();
+      state.bulle = { texte: 'WOUF !', temps: 55, bx: state.car.x, by: state.car.y - 45 };
+      return;
+    }
+  }
+
+  if (state.car.z === 0) {
+    state.car.vz = 7.2;
+    playBark();
+    state.bulle = { texte: 'WOUF !', temps: 45, bx: state.car.x, by: state.car.y - 45 };
+  }
+}
+
+function bindBtn(id, down, up) {
+  const el = document.getElementById(id);
+  const onD = e => { e.preventDefault(); el.classList.add('pressed'); down(); };
+  const onU = e => { e.preventDefault(); el.classList.remove('pressed'); if (up) up(); };
+  el.addEventListener('touchstart', onD, { passive: false });
+  el.addEventListener('touchend', onU, { passive: false });
+  el.addEventListener('mousedown', onD);
+  el.addEventListener('mouseup', onU);
+}
+
+bindBtn('btn-left', () => {
+  if (state.mode === 'TITLE') choisirPilote('oscar');
+  else input.left = true;
+}, () => { input.left = false; });
+
+bindBtn('btn-right', () => {
+  if (state.mode === 'TITLE') choisirPilote('julio');
+  else input.right = true;
+}, () => { input.right = false; });
+
+bindBtn('btn-action', actionPrincipale);
+
+window.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft') { if (state.mode === 'TITLE') choisirPilote('oscar'); input.left = true; }
+  if (e.key === 'ArrowRight') { if (state.mode === 'TITLE') choisirPilote('julio'); input.right = true; }
+  if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); actionPrincipale(); }
+  if (e.key === 'e' || e.key === 'E') {
+    state.editeurActif = !state.editeurActif;
+    document.getElementById('editor-panel').style.display = state.editeurActif ? 'block' : 'none';
+  }
+});
+window.addEventListener('keyup', e => {
+  if (e.key === 'ArrowLeft') input.left = false;
+  if (e.key === 'ArrowRight') input.right = false;
+});
+
+canvas.addEventListener('click', e => {
+  if (!state.editeurActif) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.round((e.clientX - rect.left) * (canvas.width / rect.width));
+  const y = Math.round((e.clientY - rect.top) * (canvas.height / rect.height));
+  state.pointsCliques.push({ x, y });
+  document.getElementById('editor-output').value =
+    'points: [\n' + state.pointsCliques.map(p => `  { x: ${p.x}, y: ${p.y} }`).join(',\n') + '\n]';
+});
+document.getElementById('btn-clear-pts').onclick = () => {
+  state.pointsCliques = [];
+  document.getElementById('editor-output').value = '';
+};
+
+function choisirPilote(nom) {
+  state.driver = nom;
+  document.getElementById('card-oscar').classList.toggle('active', nom === 'oscar');
+  document.getElementById('card-julio').classList.toggle('active', nom === 'julio');
+  document.getElementById('hud-driver').textContent = `PILOTE : ${nom.toUpperCase()}`;
+}
+
+function chargerEcran(idx) {
+  state.ecranIdx = idx;
+  state.pointIdx = 1;
+  state.car.decalage = 0;
+  state.dosDanesPasses.clear();
+  const scr = ROUTES_NIVEAU_1[idx];
+  state.car.x = scr.points[0].x;
+  state.car.y = scr.points[0].y;
+  if (scr.points[1]) {
+    state.car.angle = Math.atan2(scr.points[1].y - scr.points[0].y, scr.points[1].x - scr.points[0].x);
+  }
+  document.getElementById('hud-screen').textContent = `ÉCRAN ${idx + 1} / ${ROUTES_NIVEAU_1.length}`;
+}
+
+function demarrerJeu() {
+  state.mode = 'PLAYING';
+  state.portailOuvert = false;
+  document.getElementById('screen-title').classList.add('hidden');
+  chargerEcran(0);
+  playBark();
+}
+
+function retourTitre() {
+  state.mode = 'TITLE';
+  document.getElementById('screen-title').classList.remove('hidden');
+}
+
+function lerpAngle(a, b, t) {
+  let diff = b - a;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  return a + diff * t;
+}
+
+function update() {
+  if (state.bulle.temps > 0) state.bulle.temps--;
+
+  if (state.mode === 'WIN') {
+    if (state.winTimer > 0) {
+      state.winTimer--;
+      if (state.winTimer === 0) retourTitre();
+    }
+    return;
+  }
+
+  if (state.mode !== 'PLAYING' || state.editeurActif) return;
+
+  const scr = ROUTES_NIVEAU_1[state.ecranIdx];
+  const cible = scr.points[state.pointIdx];
+  if (!cible) return;
+
+  if (state.car.z > 0 || state.car.vz !== 0) {
+    state.car.z += state.car.vz;
+    state.car.vz -= 0.45;
+    if (state.car.z <= 0) { state.car.z = 0; state.car.vz = 0; }
+  }
+
+  if (input.left) state.car.decalage = Math.max(-22, state.car.decalage - 2.2);
+  else if (input.right) state.car.decalage = Math.min(22, state.car.decalage + 2.2);
+  else state.car.decalage *= 0.9;
+
+  const dx = cible.x - state.car.x;
+  const dy = cible.y - state.car.y;
+  const dist = Math.hypot(dx, dy);
+  const angleCible = Math.atan2(dy, dx);
+  state.car.angle = lerpAngle(state.car.angle, angleCible, 0.18);
+
+  let bloque = false;
+  if (scr.portail && !state.portailOuvert) {
+    if (Math.hypot(state.car.x - scr.portail.x, state.car.y - scr.portail.y) < 35) {
+      bloque = true;
+    }
+  }
+
+  scr.dosDanes.forEach((dd, i) => {
+    if (Math.hypot(state.car.x - dd.x, state.car.y - dd.y) < 42 && !state.dosDanesPasses.has(i)) {
+      state.dosDanesPasses.add(i);
+      if (state.car.z <= 8) {
+        state.car.choc = 28;
+        state.bulle = { texte: 'BOING !', temps: 40, bx: state.car.x, by: state.car.y - 45 };
+      }
+    }
+  });
+  if (state.car.choc > 0) state.car.choc--;
+
+  if (!bloque) {
+    const vit = state.car.choc > 0 ? 1.0 : VITESSE_VOITURE;
+    if (dist > vit) {
+      state.car.x += Math.cos(angleCible) * vit;
+      state.car.y += Math.sin(angleCible) * vit;
+    } else {
+      state.car.x = cible.x;
+      state.car.y = cible.y;
+      state.pointIdx++;
+      if (state.pointIdx >= scr.points.length) {
+        if (scr.estFinal) {
+          state.mode = 'WIN';
+          state.winTimer = 210;
+          playBark();
+          // Bulle placée au-dessus des chiens côté jardin (carré rouge)
+          state.bulle = { texte: 'WOUF !', temps: 150, bx: 480, by: 245 };
+        } else {
+          chargerEcran(state.ecranIdx + 1);
+        }
+      }
+    }
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  let fondNom = 'ecran_titre.jpg';
+  if (state.mode !== 'TITLE') {
+    const scr = ROUTES_NIVEAU_1[state.ecranIdx];
+    fondNom = (scr.fondFerme && !state.portailOuvert) ? scr.fondFerme : scr.fondOuvert;
+  }
+  const fond = images[fondNom];
+  if (fond && fond.complete) ctx.drawImage(fond, 0, 0, canvas.width, canvas.height);
+
+  if (state.editeurActif) {
+    ctx.strokeStyle = '#ff0055'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    state.pointsCliques.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.stroke();
+    state.pointsCliques.forEach(p => {
+      ctx.fillStyle = '#ffff00'; ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.fill();
+    });
+  }
+
+  if (state.mode === 'TITLE') return;
+
+  const rx = state.car.x - Math.sin(state.car.angle) * state.car.decalage;
+  const ry = state.car.y + Math.cos(state.car.angle) * state.car.decalage;
+
+  if (state.mode === 'WIN') {
+    drawVoiture('voiture_seule.jpg', rx, ry, -Math.PI / 2, 0, 0);
+    // Oscar et Julio placés côté jardin (dans la zone du carré rouge)
+    drawChien('oscar_debout.jpg', 440, 265, 48);
+    drawChien('julio_debout.jpg', 485, 282, 48);
+  } else {
+    ctx.save();
+    ctx.translate(rx, ry + 6);
+    ctx.rotate(state.car.angle + Math.PI / 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 18, 28, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    const carKey = state.driver === 'oscar' ? 'voiture_oscar.jpg' : 'voiture_julio.jpg';
+    const vib = state.car.choc > 0 ? Math.sin(state.car.choc) * 3 : 0;
+    drawVoiture(carKey, rx, ry, state.car.angle, state.car.z, vib);
+  }
+
+  if (state.bulle.temps > 0) {
+    const bxCenter = state.mode === 'WIN' ? state.bulle.bx : rx;
+    const byTop = state.mode === 'WIN' ? state.bulle.by : (ry - state.car.z - 50);
+    ctx.font = 'bold 14px Courier New';
+    const tw = ctx.measureText(state.bulle.texte).width + 16;
+    ctx.fillStyle = '#fffbe6'; ctx.strokeStyle = '#1f2619'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(bxCenter - tw / 2, byTop, tw, 24, 6); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#1f2619'; ctx.textAlign = 'center';
+    ctx.fillText(state.bulle.texte, bxCenter, byTop + 16);
+  }
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+</script>
+</body>
+</html>
